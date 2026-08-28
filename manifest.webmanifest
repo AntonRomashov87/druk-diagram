@@ -1,0 +1,19 @@
+{
+  "name": "Друк діаграм — Smart Chess System",
+  "short_name": "Друк діаграм",
+  "description": "Друк шахових діаграм з PGN або FEN: 12 задач на аркуш А4, вибір позиції з партії, набори фігур lichess.",
+  "lang": "uk",
+  "dir": "ltr",
+  "start_url": "./",
+  "scope": "./",
+  "display": "standalone",
+  "orientation": "any",
+  "background_color": "#0C1524",
+  "theme_color": "#0C1524",
+  "categories": ["education", "productivity"],
+  "icons": [
+    { "src": "icon-192.png", "sizes": "192x192", "type": "image/png", "purpose": "any" },
+    { "src": "icon-512.png", "sizes": "512x512", "type": "image/png", "purpose": "any" },
+    { "src": "icon-maskable-512.png", "sizes": "512x512", "type": "image/png", "purpose": "maskable" }
+  ]
+}
