@@ -3,7 +3,7 @@
    ВАЖЛИВО: після кожної зміни index.html піднімай VERSION,
    інакше браузер віддаватиме стару копію з кешу. */
 
-const VERSION = 'druk-diagram-v1';
+const VERSION = 'druk-diagram-v2';
 const SHELL = [
   './',
   './index.html',

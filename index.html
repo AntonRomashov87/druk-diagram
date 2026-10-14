@@ -124,6 +124,12 @@ input:focus,textarea:focus,select:focus{outline:2px solid var(--brass);outline-o
 .diag-cap .s{white-space:nowrap}
 .diag-cap.empty{display:none}
 
+/* режим початківця — лінійки для запису ходів */
+.lines{align-self:stretch;margin-top:1.4mm;display:flex;flex-direction:column;gap:2.2mm}
+.ln{display:flex;align-items:flex-end;gap:1.5mm}
+.ln .no{font-family:Oswald,sans-serif;font-size:8pt;line-height:1;color:#41506B;min-width:3.6mm}
+.ln .sl{flex:1;border-bottom:.5pt solid #41506B;height:4mm}
+
 .bwrap{position:relative;display:grid;grid-template-columns:auto auto;grid-template-rows:auto auto;gap:0}
 .board{
   display:grid;grid-template-columns:repeat(8,var(--sq));grid-template-rows:repeat(8,var(--sq));
@@ -270,6 +276,7 @@ input:focus,textarea:focus,select:focus{outline:2px solid var(--brass);outline-o
         <label class="f">Діаграм на аркуші</label>
         <select id="perPage">
           <option value="6">6 — 2×3 (велика)</option>
+          <option value="8">8 — 2×4</option>
           <option value="9">9 — 3×3</option>
           <option value="12" selected>12 — 3×4</option>
           <option value="16">16 — 4×4</option>
@@ -306,6 +313,27 @@ input:focus,textarea:focus,select:focus{outline:2px solid var(--brass);outline-o
     <label class="chk"><input type="checkbox" id="optAnswers"> Аркуш відповідей у кінці</label>
     <label class="chk"><input type="checkbox" id="optFooter" checked> Підвал з підписом автора</label>
     <label class="chk"><input type="checkbox" id="optLogo" checked> Логотип Smart Chess System на аркуші</label>
+    <label class="chk"><input type="checkbox" id="optKids"> Режим початківця — лінійки для запису ходів</label>
+    <div id="kidsBox" style="display:none">
+      <div class="grid2">
+        <div>
+          <label class="f">Рядків під діаграмою</label>
+          <select id="kidsLines">
+            <option value="1">1</option>
+            <option value="2" selected>2</option>
+            <option value="3">3</option>
+            <option value="4">4</option>
+          </select>
+        </div>
+        <div>
+          <label class="f">Запис у рядку</label>
+          <select id="kidsCols">
+            <option value="2">Білі й чорні</option>
+            <option value="1">Один хід</option>
+          </select>
+        </div>
+      </div>
+    </div>
   </div>
 
   <div class="block">
@@ -558,6 +586,7 @@ function injectPieceCSS(){
 /* ─── розкладка ─── */
 const LAYOUT = {
   6:  {cols:2, sq:'9.5mm'},   // дошка 76 мм
+  8:  {cols:2, sq:'8mm'},     // 2×4 — для режиму початківця
   9:  {cols:3, sq:'7.6mm'},   // дошка 61 мм
   12: {cols:3, sq:'6.5mm'},   // дошка 52 мм
   16: {cols:4, sq:'5.5mm'},   // дошка 44 мм
@@ -575,6 +604,9 @@ function render(){
   const withAnswers = $('#optAnswers').checked;
   const withFooter = $('#optFooter').checked;
   const withLogo = $('#optLogo').checked;
+  const kids = $('#optKids').checked;
+  const kidsLines = +$('#kidsLines').value;
+  const kidsCols = +$('#kidsCols').value;
   const title = $('#title').value.trim();
   const sub = $('#subtitle').value.trim();
   const label = $('#taskLabel').value.trim();
@@ -618,6 +650,7 @@ function render(){
       const left = showNum ? '№ ' + n : '';
       html += '<div class="diag-cap' + (left || right ? '' : ' empty') + '">' +
               '<span class="n">' + left + '</span><span class="s">' + right + '</span></div>';
+      if(kids) html += linesHTML(kidsLines, kidsCols, side);
       html += '</div>';
     });
 
@@ -694,6 +727,19 @@ function solutionFromPly(t){
     if(!isWhite) num++;
   });
   return out.trim();
+}
+
+/* Лінійки для запису: зліва номер ходу, далі порожні місця.
+   Коли на ході чорні, перший рядок починається з «1…» — як у нотації. */
+function linesHTML(n, cols, side){
+  let html = '<div class="lines">';
+  for(let i = 0; i < n; i++){
+    const no = (i + 1) + (i === 0 && side === 'b' ? '…' : '.');
+    html += '<div class="ln"><span class="no">' + no + '</span>';
+    for(let c = 0; c < cols; c++) html += '<span class="sl"></span>';
+    html += '</div>';
+  }
+  return html + '</div>';
 }
 
 function footHTML(){
@@ -836,12 +882,19 @@ $('#selRand').onclick = () => {
 };
 $('#shuffle').onclick = () => { TASKS.sort(()=>Math.random()-.5); renderTasks(); render(); };
 
-['perPage','moverMode','pieceSet','optCoords','optNum','optTitles','optFlip','optAnswers','optFooter']
+['perPage','moverMode','pieceSet','kidsLines','kidsCols','optCoords','optNum','optTitles','optFlip','optAnswers','optFooter']
   .forEach(id => $('#'+id).addEventListener('change', render));
 ['title','subtitle','taskLabel'].forEach(id => $('#'+id).addEventListener('input', render));
 
 $('#brandMark').style.backgroundImage = 'url(' + LOGO + ')';
 $('#optLogo').addEventListener('change', render);
+
+// Режим початківця: показуємо його налаштування і одразу беремо розкладку 2×4
+$('#optKids').addEventListener('change', e => {
+  $('#kidsBox').style.display = e.target.checked ? 'block' : 'none';
+  if(e.target.checked && +$('#perPage').value > 8) $('#perPage').value = '8';
+  render();
+});
 
 $('#btnPrint').onclick = () => { fitBoards(); window.print(); };
 window.addEventListener('beforeprint', fitBoards);
