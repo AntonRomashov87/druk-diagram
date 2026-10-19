@@ -4,15 +4,10 @@
 <meta charset="utf-8">
 <meta name="viewport" content="width=device-width, initial-scale=1">
 <title>Друк діаграм — Smart Chess System®</title>
-<link rel="manifest" href="manifest.webmanifest">
-<meta name="theme-color" content="#0C1524">
-<meta name="description" content="Друк шахових діаграм з PGN або FEN: 12 задач на аркуш А4.">
-<link rel="icon" href="icon-192.png">
-<link rel="apple-touch-icon" href="icon-192.png">
 <link rel="preconnect" href="https://fonts.googleapis.com">
 <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
 <link href="https://fonts.googleapis.com/css2?family=Oswald:wght@400;500;600;700&family=IBM+Plex+Sans:wght@400;500;600;700&display=swap" rel="stylesheet">
-<script src="chess.js"></script>
+<script src="https://cdnjs.cloudflare.com/ajax/libs/chess.js/0.10.3/chess.min.js"></script>
 <style>
 :root{
   --ui-bg:#0C1524;
@@ -114,8 +109,10 @@ input:focus,textarea:focus,select:focus{outline:2px solid var(--brass);outline-o
 
 .diag{display:flex;flex-direction:column;align-items:center;break-inside:avoid}
 .diag-ttl{
-  font-family:"IBM Plex Sans",sans-serif;font-size:7.5pt;line-height:1.15;color:#41506B;
-  align-self:stretch;margin-bottom:.5mm;overflow:hidden;text-overflow:ellipsis;white-space:nowrap
+  font-family:"IBM Plex Sans",sans-serif;font-size:7.5pt;line-height:1.2;color:#41506B;
+  align-self:stretch;margin-bottom:.5mm;overflow:hidden;
+  display:-webkit-box;-webkit-box-orient:vertical;-webkit-line-clamp:2;
+  overflow-wrap:break-word
 }
 .diag-cap{
   align-self:stretch;display:flex;align-items:center;justify-content:space-between;gap:2mm;
@@ -353,7 +350,6 @@ input:focus,textarea:focus,select:focus{outline:2px solid var(--brass);outline-o
 <main class="main">
   <div class="toolbar">
     <button class="btn primary" id="btnPrint">Друкувати</button>
-    <button class="btn" id="btnInstall" style="display:none">Встановити застосунок</button>
     <span class="stat" id="pgstat"></span>
     <span class="stat" id="fit"></span>
     <span class="sp"></span>
@@ -444,18 +440,41 @@ function parseInput(text){
 
   for(const g of games){
     const fen = g.tags.FEN && FEN_RE.test(g.tags.FEN) ? g.tags.FEN.trim() : 'start';
-    const title = buildTitle(g.tags);
+    const title = buildTitle(g.tags, g.moves);
     const sol = cleanMoves(g.moves);
     out.push(makeTask(fen, title, sol, tquPly(g.moves)));
   }
   return out;
 }
 
-function buildTitle(t){
-  if(t.Event && !/^\?*$/.test(t.Event) && !/chessbase/i.test(t.Event)) return t.Event;
-  const w = t.White||'', b = t.Black||'';
-  if(w && b && !/^\?+$/.test(w)) return w + ' — ' + b;
-  return t.Site && !/^\?+$/.test(t.Site) ? t.Site : '';
+/* Назва задачі. ChessBase кладе її в різні місця залежно від того,
+   як зібрана база, тож перебираємо джерела за пріоритетом. */
+function buildTitle(t, raw){
+  const ok = v => v && !/^[\s?.\-–—]*$/.test(v) && !/^(chessbase|new game|unknown|\*)$/i.test(v.trim());
+  const cut = v => { v = v.trim().replace(/\s+/g,' '); return v.length > 70 ? v.slice(0,69) + '…' : v; };
+
+  if(ok(t.Event) && !/chessbase/i.test(t.Event)) return cut(t.Event);
+
+  // тренувальне питання ChessBase: {[%tqu "Знайди мат…", …]}
+  const q = raw && raw.match(/\[%tqu\s+"([^"]+)"/);
+  if(q && ok(q[1])) return cut(q[1]);
+
+  const w = ok(t.White) ? t.White.trim() : '';
+  const b = ok(t.Black) ? t.Black.trim() : '';
+  if(w && b) return cut(w + ' — ' + b);
+  if(w) return cut(w);
+  if(b) return cut(b);
+
+  // звичайний текстовий коментар (не службова команда %…)
+  if(raw){
+    const m = raw.match(/\{\s*([^%}][^}]*)\}/);
+    if(m && ok(m[1])) return cut(m[1]);
+  }
+
+  for(const k of ['Annotator','Source','Opening','ECO','Site']){
+    if(ok(t[k])) return cut(t[k]);
+  }
+  return '';
 }
 
 /* ChessBase позначає тренувальну позицію коментарем {[%tqu "…"]} — беремо саме її */
@@ -773,7 +792,11 @@ function renderTasks(){
         '</select></div></div>';
     }).join('');
   }
-  $('#stat').innerHTML = 'Позицій: <b>' + TASKS.length + '</b> · вибрано <b>' + TASKS.filter(t=>t.on).length + '</b>';
+  const named = TASKS.filter(t => t.title).length;
+  let line = 'Позицій: <b>' + TASKS.length + '</b> · вибрано <b>' + TASKS.filter(t=>t.on).length + '</b>';
+  if(TASKS.length) line += ' · з назвою <b>' + named + '</b>';
+  if(TASKS.length && !named) line += '<br><span style="color:#93A2BE">У файлі немає назв — додай тег [Event "…"] до задач.</span>';
+  $('#stat').innerHTML = line;
 }
 
 /* ─── події ─── */
@@ -907,25 +930,6 @@ function setZoom(z){
 }
 $('#zoomIn').onclick = () => setZoom(zoom + .1);
 $('#zoomOut').onclick = () => setZoom(zoom - .1);
-
-/* ─── PWA ─── */
-if('serviceWorker' in navigator){
-  window.addEventListener('load', () => navigator.serviceWorker.register('sw.js').catch(()=>{}));
-}
-let deferredPrompt = null;
-window.addEventListener('beforeinstallprompt', e => {
-  e.preventDefault();
-  deferredPrompt = e;
-  $('#btnInstall').style.display = 'inline-flex';
-});
-$('#btnInstall').onclick = async () => {
-  if(!deferredPrompt) return;
-  deferredPrompt.prompt();
-  await deferredPrompt.userChoice;
-  deferredPrompt = null;
-  $('#btnInstall').style.display = 'none';
-};
-window.addEventListener('appinstalled', () => { $('#btnInstall').style.display = 'none'; });
 
 injectPieceCSS();
 
